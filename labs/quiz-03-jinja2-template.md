@@ -73,7 +73,7 @@ pod-username-managed2
 **Tujuan:** Membuat file sumber untuk repositori.
 
 > **⚠️ Catatan Tambahan (Keterbatasan Sumber):**
-> Dokumen asli Adinusa **tidak menyertakan isi teks** untuk file `.j2` ini. Isi di bawah adalah **contoh standar repositori APT** yang valid agar *playbook* bisa berjalan dan berhasil. (Pada environment nyata, kamu mungkin juga perlu menambahkan GPG Key untuk MariaDB, namun demi kesederhanaan kuis, kita gunakan konfigurasi dasar ini).
+> Dokumen asli Adinusa **tidak menyertakan isi teks** untuk file `.j2` ini. Isi di bawah adalah **contoh standar repositori APT** yang valid agar *playbook* bisa berjalan dan berhasil. 
 
 **Perintah:**
 ```bash
@@ -130,12 +130,12 @@ vim quiz-3_j2template.yml
       apt:
         update_cache: yes
 
-    - name: Install specific packages
+    - name: Install specific versions of nginx, mariadb-server and mariadb-client
       apt:
         name:
-          - nginx=1.24.0~jammy
-          - mariadb-server-10.11
-          - mariadb-client-10.11
+          - "nginx=1.24.0-1~jammy"
+          - "mariadb-server"
+          - "mariadb-client"
         state: present
         force_apt_get: yes
 
@@ -143,14 +143,14 @@ vim quiz-3_j2template.yml
       service: name=nginx state=started enabled=yes
 
     - name: Ensure mariadb-server service is started and enabled
-      service: name=mariadb-server state=started enabled=yes
+      service: name=mariadb state=started enabled=yes
 ```
 
 **Penjelasan Kunci:**
 - **`template`**: Menyalin file `.j2` ke `/etc/apt/sources.list.d/`. Karena direktori ini milik *root*, `become: true` sangat diperlukan.
 - **`update_cache: yes`**: Wajib dilakukan setelah menambahkan repositori baru agar APT mengenali daftar paket dari repositori Nginx dan MariaDB.
-- **`nginx=1.24.0~jammy`**: Ini disebut *version pinning*. Ansible akan mencari dan menginstal versi yang *persis* sama. Jika tidak ditemukan, *task* akan gagal.
-- **Sintaks `service`**: Kuis meminta format spesifik: `service: name=<service> state=<state> anotherkey=<another value>`. Itulah mengapa kita menulisnya sebaris (*inline*) dan bukan dalam bentuk *dictionary* (multi-baris).
+- **`nginx=1.24.0-1~jammy`**: Ini disebut *version pinning*. Ansible akan mencari dan menginstal versi Nginx yang *persis* sama dengan string tersebut.
+- **Sintaks `service`**: Kuis meminta format spesifik: `service: name=<service> state=<state> anotherkey=<another value>`. Itulah mengapa kita menulisnya sebaris (*inline*). Perhatikan juga bahwa untuk MariaDB kita menggunakan `name=mariadb` (bukan `mariadb-server`) sesuai dengan instruksi kuis.
 
 ---
 
@@ -181,7 +181,7 @@ Setelah *playbook* berjalan sukses (status `failed=0`), lakukan verifikasi manua
     ```
 4.  **Cek Status Service:**
     ```bash
-    ansible webservers -m command -a "systemctl is-active nginx mariadb-server"
+    ansible webservers -m command -a "systemctl is-active nginx mariadb"
     ```
 
 ## 6. Validasi Akhir
@@ -201,8 +201,8 @@ nusactl finish anadm-quiz-3
 
 | Gejala | Kemungkinan Penyebab | Langkah Pemeriksaan |
 | :--- | :--- | :--- |
-| `Failed to fetch ... 404` atau `Package not found` | Repositori belum di-*update* atau isi file `.j2` salah. | Pastikan `update_cache: yes` ada di *playbook* dan cek URL di dalam file `.j2` menggunakan `cat /etc/apt/sources.list.d/nginx.list`. |
-| `No candidate version found for nginx=...` | Versi paket tidak tersedia di repositori. | Cek repositori dengan `apt-cache madison nginx`. Pastikan URL repositori menyediakan versi Jammy. |
+| `Failed to fetch ... 404` atau `Package not found` | Repositori belum di-*update* atau isi file `.j2` salah. | Pastikan `update_cache: yes` ada di *playbook* dan cek URL di dalam file `.j2`. |
+| `No candidate version found for nginx=...` | Versi paket tidak tersedia di repositori. | Cek ketersediaan versi dengan `apt-cache madison nginx` di Managed Node. |
 | Service gagal *running* | Konflik paket (misal Apache masih terinstal dan memakai port 80). | Jalankan `systemctl status nginx` di *Managed Node* untuk melihat *error log*. |
 
 ## 8. Catatan Penting (Inkonsistensi Sumber)
