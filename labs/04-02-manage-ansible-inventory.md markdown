@@ -1,0 +1,202 @@
+# Lab 4.2: Manage Ansible Inventory
+
+> Praktikum ini membahas cara mengelola *Inventory* Ansible secara lebih lanjut. Kamu akan membuat file *inventory* kustom di direktori kerja, mengelompokkan *host* ke dalam beberapa grup, membuat grup bersarang (*child groups*), dan menggunakan fitur rentang (*host ranges*).
+
+## 1. Tujuan Lab
+
+Setelah menyelesaikan lab ini, kamu diharapkan mampu:
+- Membuat file *Inventory* kustom di direktori kerja.
+- Menggunakan flag `-i` untuk menunjuk ke file *inventory* non-*default*.
+- Mengorganisir *host* ke dalam beberapa grup (`Bogor`, `Jakarta`, `WebServers`, `Testing`, `Development`).
+- Membuat grup induk (*parent group*) yang berisi grup-grup lain menggunakan sintaks `:children`.
+- Menggunakan rentang (*host ranges*) untuk mendefinisikan beberapa *host* sekaligus.
+
+## 2. Konsep yang Digunakan
+
+- **Custom Inventory (`-i`):** Secara *default*, Ansible membaca `/etc/ansible/hosts`. Flag `-i` memungkinkan kita menggunakan file *inventory* lain (misal: `-i inventory`).
+- **Child Groups (`:children`):** Fitur Ansible untuk membuat hierarki grup. Sebuah grup induk dapat berisi grup-grup lain sebagai anggotanya.
+- **Host Ranges:** Sintaks `[start:end]` pada nama *host* (misal: `managed[1:2]`) yang akan diekspansi secara otomatis oleh Ansible menjadi `managed1` dan `managed2`.
+
+## 3. Topologi dan Environment
+
+| Komponen | Hostname | Keterangan |
+| :--- | :--- | :--- |
+| **Control Node** | `pod-username-controller` | Juga bertindak sebagai *ungrouped host* di inventory. |
+| **Managed Node 1** | `pod-username-managed1` | Termasuk dalam grup Bogor, WebServers, dan Testing. |
+| **Managed Node 2** | `pod-username-managed2` | Termasuk dalam grup Jakarta, WebServers, dan Development. |
+
+*(Catatan: `username` adalah placeholder yang harus disesuaikan dengan username lab Adinusa milikmu).*
+
+## 4. Prasyarat
+
+Jalankan perintah persiapan environment lab:
+
+```bash
+# Login ke akun Adinusa
+student@pod-username-controller:~$ nusactl login
+
+# Menjalankan script pre-konfigurasi lab
+student@pod-username-controller:~$ nusactl start anadm-004-2
+```
+
+## 5. Alur Praktikum
+
+1.  Membuat direktori kerja dan file *inventory* kustom.
+2.  Mengisi file *inventory* dengan konfigurasi grup dan *host*.
+3.  Memverifikasi seluruh isi *inventory* (semua *host*, *ungrouped*, grup spesifik, dan grup *children*).
+
+## 6. Langkah Praktikum
+
+*(Seluruh perintah di bawah ini dieksekusi pada `pod-username-controller`)*
+
+### Langkah 1: Membuat File Inventory Kustom
+
+**Tujuan:** Membuat direktori kerja baru dan mendefinisikan *inventory* dengan struktur grup yang kompleks.
+
+**Perintah:**
+```bash
+mkdir ~/managing-inventory
+cd ~/managing-inventory
+vim inventory
+```
+
+**Isi File `inventory`:**
+```ini
+pod-username-controller
+
+[Bogor]
+pod-username-managed1
+
+[Jakarta]
+pod-username-managed2
+
+[WebServers]
+pod-username-managed[1:2]
+
+[Testing]
+pod-username-managed1
+
+[Development]
+pod-username-managed2
+
+[Indonesia:children]
+Jakarta
+Bogor
+```
+
+**Penjelasan:**
+- `pod-username-controller`: Berada di paling atas tanpa grup, sehingga masuk ke grup *default* `ungrouped`.
+- `[Bogor]` & `[Jakarta]`: Grup geografis.
+- `pod-username-managed[1:2]`: Ansible akan membaca ini sebagai dua *host* terpisah, yaitu `pod-username-managed1` dan `pod-username-managed2`.
+- `[Indonesia:children]`: Mendefinisikan grup `Indonesia` yang berisi grup `Jakarta` dan `Bogor` (bukan *host* langsung, melainkan grup lain).
+
+> **Catatan Tambahan:** Jika kamu belum terbiasa dengan `vim`, tekan `Esc`, lalu ketik `:wq` dan `Enter` untuk menyimpan dan keluar.
+
+---
+
+### Langkah 2: Verifikasi Managed Hosts atau Groups
+
+**Tujuan:** Memastikan struktur *inventory* yang dibuat sudah dikenali dengan benar oleh Ansible. Perhatikan penggunaan flag `-i inventory` untuk menunjuk ke file yang baru dibuat.
+
+**1. Cek daftar semua host:**
+```bash
+ansible all -i inventory --list-hosts
+```
+**Hasil yang Diharapkan (Sesuai Sumber):**
+```text
+  hosts (3):
+    pod-username-controller
+    pod-username-managed1
+    pod-username-managed2
+```
+
+**2. Cek daftar host ungrouped (tanpa grup):**
+```bash
+ansible ungrouped -i inventory --list-hosts
+```
+**Hasil yang Diharapkan (Sesuai Sumber):**
+```text
+  hosts (1):
+    pod-username-controller
+```
+
+**3. Cek host `pod-username-managed1` secara spesifik:**
+```bash
+ansible pod-username-managed1 -i inventory --list-hosts
+```
+**Hasil yang Diharapkan (Sesuai Sumber):**
+```text
+  hosts (1):
+    pod-username-managed1
+```
+
+**4. Cek host di dalam grup `Development`:**
+```bash
+ansible Development -i inventory --list-hosts
+```
+**Hasil yang Diharapkan (Sesuai Sumber):**
+```text
+  hosts (1):
+    pod-username-managed2
+```
+
+**5. Cek host di dalam grup `Testing`:**
+```bash
+ansible Testing -i inventory --list-hosts
+```
+**Hasil yang Diharapkan (Sesuai Sumber):**
+```text
+  hosts (1):
+    pod-username-managed1
+```
+
+**6. Cek host di dalam grup `Indonesia` (Child Group):**
+```bash
+ansible Indonesia -i inventory --list-hosts
+```
+**Hasil yang Diharapkan (Sesuai Sumber):**
+```text
+  hosts (2):
+    pod-username-managed2
+    pod-username-managed1
+```
+*(Penjelasan: Karena `Indonesia` adalah grup induk dari `Jakarta` dan `Bogor`, maka seluruh anggota dari kedua grup tersebut otomatis menjadi anggota dari grup `Indonesia`).*
+
+## 7. Hasil Akhir dan Validasi
+
+Pada akhir lab, kamu harus berhasil melihat semua *host* dan grup yang telah didefinisikan melalui perintah `--list-hosts`. 
+
+**Validasi Akhir (Sesuai Instruksi Adinusa):**
+```bash
+nusactl grade anadm-004-2
+```
+Setelah nilainya keluar, bersihkan environment lab dengan perintah:
+```bash
+nusactl finish anadm-004-2
+```
+
+## 8. Troubleshooting
+
+| Gejala | Kemungkinan Penyebab | Langkah Pemeriksaan |
+| :--- | :--- | :--- |
+| Output `provided hosts list is empty` | Lupa menambahkan flag `-i inventory` atau salah direktori. | Pastikan kamu berada di `~/managing-inventory` dan file `inventory` ada di sana. |
+| Host yang muncul tidak sesuai | Kesalahan penulisan nama grup atau host. | Cek kembali ejaan *case-sensitive* (huruf besar/kecil) di file `inventory` dan perintah yang diketik. |
+| Grup `Indonesia` kosong | Sintaks `:children` salah atau grup di bawahnya kosong. | Pastikan penulisan `[Indonesia:children]` tepat dan grup `Jakarta` & `Bogor` sudah dideklarasikan di atasnya. |
+
+## 9. Konsep yang Dipelajari
+
+Lab ini mendemonstrasikan fleksibilitas *Inventory* Ansible. Ansible tidak membatasi kita untuk hanya menggunakan satu file di `/etc/ansible/hosts`. Kita bisa membuat file kustom (seperti `inventory` di direktori kerja) dan memanggilnya menggunakan flag `-i`. Selain itu, fitur `:children` memungkinkan pengorganisasian *host* secara hierarkis (misal: grup berdasarkan lokasi geografis), yang sangat berguna saat melakukan *deployment* pada skala besar.
+
+## 10. Tantangan Lanjutan (Opsional)
+
+> **Peringatan:** Bagian ini bukan bagian dari lab resmi Adinusa. Lakukan di lingkungan uji coba.
+
+1.  **Eksplorasi Group Vars:** Buat folder `group_vars` di dalam `~/managing-inventory`. Buat file `Jakarta.yml` di dalamnya dan isi dengan variabel `ntp_server: id.pool.ntp.org`. Coba jalankan perintah *ad-hoc* untuk mengecek nilai variabel tersebut di *host* yang ada di grup Jakarta.
+2.  **Konversi ke YAML:** Coba ubah file `inventory` (format INI) yang baru kamu buat menjadi format YAML (sesuai materi di modul Fundamentals) dan pastikan `ansible all -i inventory.yml --list-hosts` tetap menghasilkan output yang sama.
+
+## 11. Referensi
+
+- **Sumber Utama:** Modul Adinusa Freecourse "Automation With Ansible" - `Lab 4.2: Manage Ansible Inventory`.
+- **Referensi Tambahan:**
+  - [Ansible Inventory Guide - How to build your inventory](https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.html)
+  - [Ansible Inventory Guide - Grouping](https://docs.ansible.com/ansible/latest/inventory_guide/intro_inventory.html#grouping)
